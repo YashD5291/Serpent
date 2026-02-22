@@ -1,0 +1,64 @@
+{
+  "name": "serpent",
+  "displayName": "Serpent",
+  "description": "Silently copy Jupyter notebook cells and outputs",
+  "version": "0.1.0",
+  "publisher": "yashdesai",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Notebooks"
+  ],
+  "activationEvents": [
+    "onNotebook:jupyter-notebook"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "serpent.copyCell",
+        "title": "Serpent: Copy Cell Code + Output"
+      },
+      {
+        "command": "serpent.copyCellCodeOnly",
+        "title": "Serpent: Copy Cell Code Only"
+      },
+      {
+        "command": "serpent.copyCellOutputOnly",
+        "title": "Serpent: Copy Cell Output Only"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "serpent.copyCell",
+        "key": "ctrl+shift+c",
+        "mac": "ctrl+shift+c",
+        "when": "notebookEditorFocused"
+      },
+      {
+        "command": "serpent.copyCellCodeOnly",
+        "key": "ctrl+shift+alt+c",
+        "mac": "ctrl+shift+alt+c",
+        "when": "notebookEditorFocused"
+      },
+      {
+        "command": "serpent.copyCellOutputOnly",
+        "key": "ctrl+shift+alt+o",
+        "mac": "ctrl+shift+alt+o",
+        "when": "notebookEditorFocused"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.3.0"
+  }
+}
