@@ -8,11 +8,11 @@ No flashing, no selections, no visual noise — just the content on your clipboa
 
 Focus on any cell in a Jupyter notebook and use these keybindings:
 
-| Keybinding | Command | What gets copied |
-|---|---|---|
-| `Ctrl+Shift+C` | Copy Cell | Code + output |
-| `Ctrl+Shift+Alt+C` | Copy Code Only | Code only |
-| `Ctrl+Shift+Alt+O` | Copy Output Only | Output only |
+| Command | Windows/Linux | Mac | What gets copied |
+|---|---|---|---|
+| Copy Cell | `Ctrl+Shift+C` | `Cmd+Shift+C` | Code + output |
+| Code Only | `Ctrl+Shift+Alt+C` | `Cmd+Shift+Alt+C` | Code only |
+| Output Only | `Ctrl+Shift+Alt+O` | `Cmd+Shift+Alt+O` | Output only |
 
 All keybindings are scoped to notebook editors and won't interfere with anything else.
 

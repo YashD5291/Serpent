@@ -34,19 +34,19 @@
       {
         "command": "serpent.copyCell",
         "key": "ctrl+shift+c",
-        "mac": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
         "when": "notebookEditorFocused"
       },
       {
         "command": "serpent.copyCellCodeOnly",
         "key": "ctrl+shift+alt+c",
-        "mac": "ctrl+shift+alt+c",
+        "mac": "cmd+shift+alt+c",
         "when": "notebookEditorFocused"
       },
       {
         "command": "serpent.copyCellOutputOnly",
         "key": "ctrl+shift+alt+o",
-        "mac": "ctrl+shift+alt+o",
+        "mac": "cmd+shift+alt+o",
         "when": "notebookEditorFocused"
       }
     ]
