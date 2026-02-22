@@ -12,7 +12,8 @@
     "Notebooks"
   ],
   "activationEvents": [
-    "onNotebook:jupyter-notebook"
+    "onNotebook:jupyter-notebook",
+    "onCommand:serpent.sendFile"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -28,26 +29,46 @@
       {
         "command": "serpent.copyCellOutputOnly",
         "title": "Serpent: Copy Cell Output Only"
+      },
+      {
+        "command": "serpent.copyCellImage",
+        "title": "Serpent: Copy Cell Image to Clipboard"
+      },
+      {
+        "command": "serpent.sendFile",
+        "title": "Serpent: Send File to Telegram"
       }
     ],
     "keybindings": [
       {
         "command": "serpent.copyCell",
         "key": "ctrl+shift+c",
-        "mac": "cmd+shift+c",
+        "mac": "ctrl+shift+c",
         "when": "notebookEditorFocused"
       },
       {
         "command": "serpent.copyCellCodeOnly",
         "key": "ctrl+shift+alt+c",
-        "mac": "cmd+shift+alt+c",
+        "mac": "ctrl+shift+alt+c",
         "when": "notebookEditorFocused"
       },
       {
         "command": "serpent.copyCellOutputOnly",
         "key": "ctrl+shift+alt+o",
-        "mac": "cmd+shift+alt+o",
+        "mac": "ctrl+shift+alt+o",
         "when": "notebookEditorFocused"
+      },
+      {
+        "command": "serpent.copyCellImage",
+        "key": "ctrl+shift+alt+i",
+        "mac": "ctrl+shift+alt+i",
+        "when": "notebookEditorFocused"
+      },
+      {
+        "command": "serpent.sendFile",
+        "key": "ctrl+shift+c",
+        "mac": "ctrl+shift+c",
+        "when": "editorTextFocus && !notebookEditorFocused"
       }
     ]
   },

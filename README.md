@@ -10,9 +10,9 @@ Focus on any cell in a Jupyter notebook and use these keybindings:
 
 | Command | Windows/Linux | Mac | What gets copied |
 |---|---|---|---|
-| Copy Cell | `Ctrl+Shift+C` | `Cmd+Shift+C` | Code + output |
-| Code Only | `Ctrl+Shift+Alt+C` | `Cmd+Shift+Alt+C` | Code only |
-| Output Only | `Ctrl+Shift+Alt+O` | `Cmd+Shift+Alt+O` | Output only |
+| Copy Cell | `Ctrl+Shift+C` | `Ctrl+Shift+C` | Code + output |
+| Code Only | `Ctrl+Shift+Alt+C` | `Ctrl+Shift+Option+C` | Code only |
+| Output Only | `Ctrl+Shift+Alt+O` | `Ctrl+Shift+Option+O` | Output only |
 
 All keybindings are scoped to notebook editors and won't interfere with anything else.
 
