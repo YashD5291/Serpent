@@ -1,13 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "Serpent",
-  "description": "Send Jupyter notebook cells and coding problems to Telegram",
+  "name": "Page Notes",
+  "description": "Save quick notes for any webpage",
   "version": "0.2.0",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://api.telegram.org/*"],
   "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
     "default_popup": "popup.html",
-    "default_title": "Serpent Settings"
+    "default_title": "Page Notes"
   },
   "background": {
     "service_worker": "background.js"

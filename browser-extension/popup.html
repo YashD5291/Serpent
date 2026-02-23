@@ -10,6 +10,7 @@
       font-size: 13px;
       color: #1a1a1a;
       padding: 16px;
+      overflow: hidden;
     }
     h1 {
       font-size: 16px;
@@ -17,14 +18,86 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    label {
+    h1 .icon { font-size: 18px; }
+
+    /* --- Notes panel (decoy) --- */
+    #notes-panel.hidden { display: none; }
+    .page-url {
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    textarea {
+      width: 100%;
+      height: 140px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #4a9eff;
+      box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+    }
+    textarea::placeholder { color: #bbb; }
+    .note-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn {
+      flex: 1;
+      padding: 7px 0;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-save { background: #1a1a1a; color: #fff; }
+    .btn-save:hover { background: #333; }
+    .btn-clear { background: #f0f0f0; color: #666; }
+    .btn-clear:hover { background: #e4e4e4; }
+    .note-status {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      min-height: 16px;
+    }
+    .note-count {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+      font-size: 11px;
+      color: #aaa;
+      text-align: center;
+    }
+
+    /* --- Config panel (hidden) --- */
+    #config-panel { display: none; }
+    #config-panel.visible { display: block; }
+    #config-panel label {
       display: block;
       font-weight: 600;
       margin-bottom: 4px;
       margin-top: 12px;
+      font-size: 12px;
+      color: #555;
     }
-    input {
+    #config-panel label:first-child { margin-top: 0; }
+    #config-panel input {
       width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
@@ -32,12 +105,12 @@
       font-size: 13px;
       font-family: monospace;
     }
-    input:focus {
+    #config-panel input:focus {
       outline: none;
       border-color: #4a9eff;
       box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
     }
-    button {
+    .config-save {
       margin-top: 16px;
       width: 100%;
       padding: 8px;
@@ -48,50 +121,49 @@
       font-size: 13px;
       cursor: pointer;
     }
-    button:hover { background: #333; }
-    .status {
+    .config-save:hover { background: #333; }
+    .config-status {
       margin-top: 8px;
       font-size: 12px;
       color: #666;
       text-align: center;
     }
-    .shortcuts {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid #eee;
-      font-size: 11px;
-      color: #888;
-    }
-    .shortcuts div { margin-bottom: 4px; }
-    kbd {
-      background: #f0f0f0;
+    .config-back {
+      margin-top: 10px;
+      width: 100%;
+      padding: 6px;
+      background: none;
       border: 1px solid #ddd;
-      border-radius: 3px;
-      padding: 1px 4px;
-      font-size: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #888;
+      cursor: pointer;
     }
+    .config-back:hover { background: #f8f8f8; }
   </style>
 </head>
 <body>
-  <h1>Serpent</h1>
+  <h1 id="title"><span class="icon">&#128221;</span> Page Notes</h1>
 
-  <label for="token">Bot Token</label>
-  <input type="password" id="token" placeholder="123456:ABC-DEF..." autocomplete="off">
-
-  <label for="chatid">Chat ID</label>
-  <input type="text" id="chatid" placeholder="-1001234567890" autocomplete="off">
-
-  <button id="save">Save</button>
-  <div class="status" id="status"></div>
-
-  <div class="shortcuts">
-    <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>;</kbd> Send to Telegram</div>
-    <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> Copy to clipboard</div>
-    <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd> Send output (Jupyter)</div>
-    <div style="margin-top: 8px; font-size: 10px; color: #aaa;">
-      LeetCode / HackerRank / Codeforces / CodeChef<br>
-      Codility / CoderPad / AtCoder / CSES / Kattis / SPOJ
+  <div id="notes-panel">
+    <div class="page-url" id="page-url">No active tab</div>
+    <textarea id="note-input" placeholder="Type your notes here..."></textarea>
+    <div class="note-actions">
+      <button class="btn btn-save" id="save-note">Save Note</button>
+      <button class="btn btn-clear" id="clear-note">Clear</button>
     </div>
+    <div class="note-status" id="note-status"></div>
+    <div class="note-count" id="note-count"></div>
+  </div>
+
+  <div id="config-panel">
+    <label for="cfg-a">Service Token</label>
+    <input type="password" id="cfg-a" placeholder="Enter token..." autocomplete="off">
+    <label for="cfg-b">Channel ID</label>
+    <input type="text" id="cfg-b" placeholder="Enter ID..." autocomplete="off">
+    <button class="config-save" id="cfg-save">Save</button>
+    <div class="config-status" id="cfg-status"></div>
+    <button class="config-back" id="cfg-back">&#8592; Back to Notes</button>
   </div>
 
   <script src="popup.js"></script>

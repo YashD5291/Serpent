@@ -1,6 +1,4 @@
 // Content script: ISOLATED world
-// Handles keybindings + background messaging
-// Reads random channel names from page.js via short-lived DOM attribute
 
 (function () {
   "use strict";
@@ -97,9 +95,9 @@
       var msg = "<b>Code</b>\n<pre>" + esc(d.code) + "</pre>";
       var out = d.outputs.join("\n").trim();
       if (out) msg += "\n\n<b>Output</b>\n<pre>" + esc(out) + "</pre>";
-      await bg({ type: "serpent:sendText", text: msg });
+      await bg({ type: "ext:pushText", text: msg });
       for (var i = 0; i < d.images.length; i++) {
-        await bg({ type: "serpent:sendImage", base64: d.images[i] });
+        await bg({ type: "ext:pushImage", base64: d.images[i] });
       }
     } catch (e) { /* silent */ }
     finally { sending = false; }
@@ -112,9 +110,9 @@
       var d = await request(channels.a, channels.b, 3000);
       if (!d) return;
       var out = d.outputs.join("\n").trim();
-      if (out) await bg({ type: "serpent:sendText", text: "<pre>" + esc(out) + "</pre>" });
+      if (out) await bg({ type: "ext:pushText", text: "<pre>" + esc(out) + "</pre>" });
       for (var i = 0; i < d.images.length; i++) {
-        await bg({ type: "serpent:sendImage", base64: d.images[i] });
+        await bg({ type: "ext:pushImage", base64: d.images[i] });
       }
     } catch (e) { /* silent */ }
     finally { sending = false; }
@@ -134,7 +132,7 @@
     try {
       var d = await request(channels.c, channels.d, 5000);
       if (!d) return;
-      await bg({ type: "serpent:sendText", text: "<pre>" + esc(d.body) + "</pre>" });
+      await bg({ type: "ext:pushText", text: "<pre>" + esc(d.body) + "</pre>" });
     } catch (e) { /* silent */ }
     finally { sending = false; }
   }
