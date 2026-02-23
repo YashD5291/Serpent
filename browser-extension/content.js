@@ -1,15 +1,30 @@
-// Content script: bridges page context (inject.js) ↔ background.js
+// Content script: bridges page context (inject.js / scraper.js) ↔ background.js
 
 (function () {
   "use strict";
 
-  // Inject the page-context script
-  const script = document.createElement("script");
-  script.src = chrome.runtime.getURL("inject.js");
-  script.onload = () => script.remove();
-  (document.head || document.documentElement).appendChild(script);
+  // Inject all page-context scripts
+  const scripts = [
+    "inject.js",
+    "platforms/leetcode.js",
+    "platforms/hackerrank.js",
+    "platforms/codeforces.js",
+    "platforms/codechef.js",
+    "platforms/codility.js",
+    "platforms/coderpad.js",
+    "platforms/atcoder.js",
+    "platforms/generic.js",
+    "scraper.js",
+  ];
 
-  // --- Request cell data from inject.js ---
+  for (const src of scripts) {
+    const script = document.createElement("script");
+    script.src = chrome.runtime.getURL(src);
+    script.onload = () => script.remove();
+    (document.head || document.documentElement).appendChild(script);
+  }
+
+  // --- Request cell data from inject.js (Jupyter) ---
 
   let pendingResolve = null;
   let requestId = 0;
@@ -22,19 +37,41 @@
         resolve(null);
       }, 2000);
 
-      pendingResolve = { id, resolve, timeout };
+      pendingResolve = { id, resolve, timeout, type: "cell" };
       window.postMessage({ type: "serpent:getCell", id }, "*");
+    });
+  }
+
+  function getProblemData() {
+    return new Promise((resolve) => {
+      const id = ++requestId;
+      const timeout = setTimeout(() => {
+        pendingResolve = null;
+        resolve(null);
+      }, 5000); // longer timeout for API-based scrapers (LeetCode GraphQL)
+
+      pendingResolve = { id, resolve, timeout, type: "problem" };
+      window.postMessage({ type: "serpent:scrapeProblem", id }, "*");
     });
   }
 
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
-    if (!event.data || event.data.type !== "serpent:cellData") return;
-    if (!pendingResolve || event.data.id !== pendingResolve.id) return;
+    if (!event.data || !pendingResolve) return;
 
-    clearTimeout(pendingResolve.timeout);
-    pendingResolve.resolve(event.data);
-    pendingResolve = null;
+    if (event.data.type === "serpent:cellData" && pendingResolve.type === "cell") {
+      if (event.data.id !== pendingResolve.id) return;
+      clearTimeout(pendingResolve.timeout);
+      pendingResolve.resolve(event.data);
+      pendingResolve = null;
+    }
+
+    if (event.data.type === "serpent:problemData" && pendingResolve.type === "problem") {
+      if (event.data.id !== pendingResolve.id) return;
+      clearTimeout(pendingResolve.timeout);
+      pendingResolve.resolve(event.data);
+      pendingResolve = null;
+    }
   });
 
   // --- Send to background ---
@@ -55,11 +92,22 @@
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // --- Detect if we're on a Jupyter page ---
+
+  function isJupyterPage() {
+    return !!(
+      document.querySelector(".jp-Notebook") ||
+      document.querySelector(".jp-Cell") ||
+      document.querySelector("#notebook-container") ||
+      document.querySelector(".notebook-cell")
+    );
+  }
+
   // --- Send lock ---
 
   let sending = false;
 
-  // --- Commands ---
+  // --- Jupyter commands (existing) ---
 
   async function sendCellToTelegram() {
     if (sending) return;
@@ -71,31 +119,16 @@
 
       const { code, outputs, images } = result.data;
 
-      // Build text message
       let message = `<b>Code</b>\n<pre>${escapeHtml(code)}</pre>`;
       const outputText = outputs.join("\n").trim();
       if (outputText) {
         message += `\n\n<b>Output</b>\n<pre>${escapeHtml(outputText)}</pre>`;
       }
 
-      const textResult = await sendToBackground({
-        type: "serpent:sendText",
-        text: message,
-      });
+      await sendToBackground({ type: "serpent:sendText", text: message });
 
-      if (!textResult.ok) {
-        console.error("[Serpent]", textResult.error);
-      }
-
-      // Send images
       for (const base64 of images) {
-        const imgResult = await sendToBackground({
-          type: "serpent:sendImage",
-          base64: base64,
-        });
-        if (!imgResult.ok) {
-          console.error("[Serpent] Image send failed:", imgResult.error);
-        }
+        await sendToBackground({ type: "serpent:sendImage", base64 });
       }
     } catch (err) {
       console.error("[Serpent]", err);
@@ -116,19 +149,14 @@
 
       const outputText = outputs.join("\n").trim();
       if (outputText) {
-        const res = await sendToBackground({
+        await sendToBackground({
           type: "serpent:sendText",
           text: `<pre>${escapeHtml(outputText)}</pre>`,
         });
-        if (!res.ok) console.error("[Serpent]", res.error);
       }
 
       for (const base64 of images) {
-        const res = await sendToBackground({
-          type: "serpent:sendImage",
-          base64: base64,
-        });
-        if (!res.ok) console.error("[Serpent]", res.error);
+        await sendToBackground({ type: "serpent:sendImage", base64 });
       }
     } catch (err) {
       console.error("[Serpent]", err);
@@ -147,35 +175,79 @@
     }
   }
 
+  // --- Problem scraping commands ---
+
+  async function sendProblemToTelegram() {
+    if (sending) return;
+    sending = true;
+
+    try {
+      const result = await getProblemData();
+      if (!result || !result.data) return;
+
+      const { body } = result.data;
+      await sendToBackground({
+        type: "serpent:sendText",
+        text: `<pre>${escapeHtml(body)}</pre>`,
+      });
+    } catch (err) {
+      console.error("[Serpent]", err);
+    } finally {
+      sending = false;
+    }
+  }
+
+  async function copyProblemToClipboard() {
+    try {
+      const result = await getProblemData();
+      if (!result || !result.data) return;
+      await navigator.clipboard.writeText(result.data.body);
+    } catch (err) {
+      console.error("[Serpent]", err);
+    }
+  }
+
   // --- Keybindings ---
 
   document.addEventListener(
     "keydown",
     (e) => {
-      // Ctrl+Shift+C (no Alt) → send cell to Telegram
+      const jupyter = isJupyterPage();
+
+      // Ctrl+Shift+C (no Alt) → send to Telegram
       if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyC") {
         e.preventDefault();
         e.stopPropagation();
-        sendCellToTelegram();
+        if (jupyter) {
+          sendCellToTelegram();
+        } else {
+          sendProblemToTelegram();
+        }
         return;
       }
 
-      // Ctrl+Shift+Alt+C → copy code to clipboard
+      // Ctrl+Shift+Alt+C → copy to clipboard
       if (e.ctrlKey && e.shiftKey && e.altKey && e.code === "KeyC") {
         e.preventDefault();
         e.stopPropagation();
-        copyCellCode();
+        if (jupyter) {
+          copyCellCode();
+        } else {
+          copyProblemToClipboard();
+        }
         return;
       }
 
-      // Ctrl+Shift+Alt+O → send output to Telegram
+      // Ctrl+Shift+Alt+O → send output to Telegram (Jupyter only)
       if (e.ctrlKey && e.shiftKey && e.altKey && e.code === "KeyO") {
-        e.preventDefault();
-        e.stopPropagation();
-        sendOutputToTelegram();
+        if (jupyter) {
+          e.preventDefault();
+          e.stopPropagation();
+          sendOutputToTelegram();
+        }
         return;
       }
     },
-    true // capture phase — fire before Jupyter's handlers
+    true
   );
 })();

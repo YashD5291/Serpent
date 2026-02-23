@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Serpent",
-  "description": "Send Jupyter notebook cells and outputs to Telegram",
-  "version": "0.1.0",
+  "description": "Send Jupyter notebook cells and coding problems to Telegram",
+  "version": "0.2.0",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://api.telegram.org/*"],
   "action": {
@@ -22,10 +22,25 @@
         "https://*.jupyter.org/*",
         "https://*.jupyterhub.com/*",
         "https://*.jupyterhub.org/*",
-        "https://*.colab.research.google.com/*",
         "https://*.kaggle.com/*",
         "https://*.databricks.com/*",
-        "https://*.sagemaker.aws/*"
+        "https://*.sagemaker.aws/*",
+        "https://colab.research.google.com/*",
+        "https://leetcode.com/*",
+        "https://www.hackerrank.com/*",
+        "https://codeforces.com/*",
+        "https://*.codeforces.com/*",
+        "https://www.codechef.com/*",
+        "https://app.codility.com/*",
+        "https://app-eu.codility.com/*",
+        "https://coderpad.io/*",
+        "https://app.coderpad.io/*",
+        "https://*.coderpad.io/*",
+        "https://atcoder.jp/*",
+        "https://*.atcoder.jp/*",
+        "https://cses.fi/*",
+        "https://*.kattis.com/*",
+        "https://www.spoj.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -33,7 +48,18 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["inject.js"],
+      "resources": [
+        "inject.js",
+        "scraper.js",
+        "platforms/leetcode.js",
+        "platforms/hackerrank.js",
+        "platforms/codeforces.js",
+        "platforms/codechef.js",
+        "platforms/codility.js",
+        "platforms/coderpad.js",
+        "platforms/atcoder.js",
+        "platforms/generic.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]
