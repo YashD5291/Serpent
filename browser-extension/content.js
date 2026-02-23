@@ -1,18 +1,41 @@
 // Content script: ISOLATED world
 // Handles keybindings + background messaging
-// Communicates with page.js (MAIN world) via postMessage
+// Reads random channel names from page.js via short-lived DOM attribute
 
 (function () {
   "use strict";
 
-  var CH_REQ_CELL = "__x0c1";
-  var CH_RES_CELL = "__x0c2";
-  var CH_REQ_PROB = "__x0p1";
-  var CH_RES_PROB = "__x0p2";
-
+  var channels = null;
   var pending = null;
   var rid = 0;
   var sending = false;
+
+  // Read channel names set by page.js (MAIN world)
+  function readChannels() {
+    if (channels) return true;
+    var raw = document.documentElement.getAttribute("data-_q");
+    if (raw) {
+      try { channels = JSON.parse(raw); } catch (e) {}
+    }
+    return !!channels;
+  }
+
+  // Retry reading channels (page.js may not have run yet)
+  var channelRetries = 0;
+  var channelReady = new Promise(function (resolve) {
+    function check() {
+      if (readChannels()) {
+        resolve();
+        return;
+      }
+      if (++channelRetries > 50) {
+        resolve(); // give up silently
+        return;
+      }
+      setTimeout(check, 100);
+    }
+    check();
+  });
 
   function request(type, resType, timeoutMs) {
     return new Promise(function (resolve) {
@@ -66,10 +89,10 @@
   // --- Actions ---
 
   async function sendCell() {
-    if (sending) return;
+    if (sending || !channels) return;
     sending = true;
     try {
-      var d = await request(CH_REQ_CELL, CH_RES_CELL, 3000);
+      var d = await request(channels.a, channels.b, 3000);
       if (!d) return;
       var msg = "<b>Code</b>\n<pre>" + esc(d.code) + "</pre>";
       var out = d.outputs.join("\n").trim();
@@ -83,10 +106,10 @@
   }
 
   async function sendOutput() {
-    if (sending) return;
+    if (sending || !channels) return;
     sending = true;
     try {
-      var d = await request(CH_REQ_CELL, CH_RES_CELL, 3000);
+      var d = await request(channels.a, channels.b, 3000);
       if (!d) return;
       var out = d.outputs.join("\n").trim();
       if (out) await bg({ type: "serpent:sendText", text: "<pre>" + esc(out) + "</pre>" });
@@ -98,17 +121,18 @@
   }
 
   async function copyCode() {
+    if (!channels) return;
     try {
-      var d = await request(CH_REQ_CELL, CH_RES_CELL, 3000);
+      var d = await request(channels.a, channels.b, 3000);
       if (d) await navigator.clipboard.writeText(d.code);
     } catch (e) { /* silent */ }
   }
 
   async function sendProblem() {
-    if (sending) return;
+    if (sending || !channels) return;
     sending = true;
     try {
-      var d = await request(CH_REQ_PROB, CH_RES_PROB, 5000);
+      var d = await request(channels.c, channels.d, 5000);
       if (!d) return;
       await bg({ type: "serpent:sendText", text: "<pre>" + esc(d.body) + "</pre>" });
     } catch (e) { /* silent */ }
@@ -116,15 +140,19 @@
   }
 
   async function copyProblem() {
+    if (!channels) return;
     try {
-      var d = await request(CH_REQ_PROB, CH_RES_PROB, 5000);
+      var d = await request(channels.c, channels.d, 5000);
       if (d) await navigator.clipboard.writeText(d.body);
     } catch (e) { /* silent */ }
   }
 
   // --- Keybindings ---
 
-  document.addEventListener("keydown", function (e) {
+  document.addEventListener("keydown", async function (e) {
+    await channelReady;
+    if (!channels) return;
+
     var jupyter = isJupyter();
 
     if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "Semicolon") {

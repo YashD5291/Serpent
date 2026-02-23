@@ -4,6 +4,21 @@
 (function () {
   "use strict";
 
+  // --- Per-session random channel names ---
+
+  function rk() {
+    return "_" + Math.random().toString(36).slice(2, 10);
+  }
+
+  var channels = { a: rk(), b: rk(), c: rk(), d: rk() };
+
+  // Pass channel names to ISOLATED world via a short-lived DOM attribute
+  document.documentElement.setAttribute("data-_q", JSON.stringify(channels));
+  // Remove immediately on next microtask so it's not visible to page scripts
+  Promise.resolve().then(function () {
+    document.documentElement.removeAttribute("data-_q");
+  });
+
   // --- Jupyter detection ---
 
   function isJupyter() {
@@ -319,38 +334,32 @@
     generic: scrapeGeneric,
   };
 
-  // --- Message handling (obfuscated channel) ---
-
-  var CH_REQ_CELL = "__x0c1";
-  var CH_RES_CELL = "__x0c2";
-  var CH_REQ_PROB = "__x0p1";
-  var CH_RES_PROB = "__x0p2";
+  // --- Message handling (random channel names) ---
 
   window.addEventListener("message", function (e) {
     if (e.source !== window || !e.data) return;
 
-    if (e.data.t === CH_REQ_CELL) {
+    if (e.data.t === channels.a) {
       var cellData = null;
       if (isJupyter()) cellData = getJupyterCell();
-      window.postMessage({ t: CH_RES_CELL, i: e.data.i, d: cellData }, "*");
+      window.postMessage({ t: channels.b, i: e.data.i, d: cellData }, "*");
     }
 
-    if (e.data.t === CH_REQ_PROB) {
+    if (e.data.t === channels.c) {
       var platform = detectPlatform();
       if (platform === "jupyter") {
-        window.postMessage({ t: CH_RES_PROB, i: e.data.i, d: null }, "*");
+        window.postMessage({ t: channels.d, i: e.data.i, d: null }, "*");
         return;
       }
       var fn = scrapers[platform] || scrapers.generic;
       Promise.resolve().then(function () { return fn(); }).then(function (result) {
-        window.postMessage({ t: CH_RES_PROB, i: e.data.i, d: result }, "*");
+        window.postMessage({ t: channels.d, i: e.data.i, d: result }, "*");
       }).catch(function () {
-        // Try generic fallback
         try {
           var fallback = scrapeGeneric();
-          window.postMessage({ t: CH_RES_PROB, i: e.data.i, d: fallback }, "*");
+          window.postMessage({ t: channels.d, i: e.data.i, d: fallback }, "*");
         } catch (ex) {
-          window.postMessage({ t: CH_RES_PROB, i: e.data.i, d: null }, "*");
+          window.postMessage({ t: channels.d, i: e.data.i, d: null }, "*");
         }
       });
     }
