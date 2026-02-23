@@ -12,12 +12,9 @@
 
   var channels = { a: rk(), b: rk(), c: rk(), d: rk() };
 
-  // Pass channel names to ISOLATED world via a short-lived DOM attribute
+  // Pass channel names to ISOLATED world via a DOM attribute
+  // content.js reads and removes it
   document.documentElement.setAttribute("data-_q", JSON.stringify(channels));
-  // Remove immediately on next microtask so it's not visible to page scripts
-  Promise.resolve().then(function () {
-    document.documentElement.removeAttribute("data-_q");
-  });
 
   // --- Jupyter detection ---
 

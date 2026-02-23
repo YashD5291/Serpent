@@ -14,6 +14,7 @@
     var raw = document.documentElement.getAttribute("data-_q");
     if (raw) {
       try { channels = JSON.parse(raw); } catch (e) {}
+      document.documentElement.removeAttribute("data-_q");
     }
     return !!channels;
   }

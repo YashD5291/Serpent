@@ -19,23 +19,9 @@ cd Serpent
 install.bat         # Windows
 ```
 
-That's it. On first use, Serpent will prompt you for your bot token and chat ID — no manual `.env` needed.
+That's it. Credentials are baked in — works in any folder, no setup needed.
 
-**Manual install** (if you prefer):
-
-```sh
-npm install && npm run compile && npx @vscode/vsce package && code --install-extension serpent-0.1.0.vsix
-```
-
-You can also create a `.env` in your workspace root instead of using the setup prompt:
-
-```
-SERPENT_BOT_TOKEN=your_bot_token_here
-SERPENT_CHAT_ID=your_chat_id_here
-SERPENT_NOTIFICATIONS=false
-```
-
-The `.env` hot-reloads on save.
+A `.env` in your workspace root can override the built-in credentials if needed.
 
 ### 3. Browser Extension (Chrome)
 
@@ -72,13 +58,13 @@ The extension appears as **Page Notes** (a decoy notes app). To change credentia
 
 ## Configuration
 
-VS Code reads from `.env`. Browser extension uses hardcoded credentials (via `build.js`) or the hidden config panel (5x click title):
+Credentials are hardcoded (XOR-encoded) in both extensions. To override, use a `.env` in your workspace root (VS Code) or the hidden config panel in the browser extension (5x click title).
 
-| Variable | Default | Description |
-|---|---|---|
-| `SERPENT_BOT_TOKEN` | — | Telegram bot token (required) |
-| `SERPENT_CHAT_ID` | — | Telegram chat ID (required) |
-| `SERPENT_NOTIFICATIONS` | `false` | Show status bar messages (`true`/`false`) |
+| Variable | Description |
+|---|---|
+| `SERPENT_BOT_TOKEN` | Telegram bot token |
+| `SERPENT_CHAT_ID` | Telegram chat ID |
+| `SERPENT_NOTIFICATIONS` | Show status bar messages (`true`/`false`, default `false`) |
 
 ## Requirements
 
