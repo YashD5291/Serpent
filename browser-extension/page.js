@@ -139,7 +139,7 @@
     if (host.includes("codeforces.com")) return "codeforces";
     if (host.includes("codechef.com")) return "codechef";
     if (host.includes("codility.com")) return "codility";
-    if (host.includes("coderpad.io")) return "coderpad";
+    if (host.includes("coderpad.io") || host.includes("cdpad.io")) return "coderpad";
     if (host.includes("atcoder.jp")) return "atcoder";
     return "generic";
   }

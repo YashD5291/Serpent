@@ -36,12 +36,15 @@
         "https://coderpad.io/*",
         "https://app.coderpad.io/*",
         "https://*.coderpad.io/*",
+        "https://*.cdpad.io/*",
         "https://atcoder.jp/*",
         "https://*.atcoder.jp/*",
         "https://cses.fi/*",
         "https://*.kattis.com/*",
         "https://www.spoj.com/*"
       ],
+      "all_frames": true,
+      "match_about_blank": true,
       "js": ["content.js"],
       "run_at": "document_idle"
     },
@@ -68,12 +71,15 @@
         "https://coderpad.io/*",
         "https://app.coderpad.io/*",
         "https://*.coderpad.io/*",
+        "https://*.cdpad.io/*",
         "https://atcoder.jp/*",
         "https://*.atcoder.jp/*",
         "https://cses.fi/*",
         "https://*.kattis.com/*",
         "https://www.spoj.com/*"
       ],
+      "all_frames": true,
+      "match_about_blank": true,
       "js": ["page.js"],
       "run_at": "document_idle",
       "world": "MAIN"
