@@ -6,3 +6,5 @@ tsconfig.json
 test.ipynb
 .claude/**
 .history/**
+.ipynb_checkpoints/**
+browser-extension/**

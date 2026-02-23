@@ -9,6 +9,7 @@ import * as https from "https";
 
 let botToken = "";
 let chatId = "";
+let notifications = false;
 let envLoaded = false;
 
 async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
@@ -40,6 +41,8 @@ async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
           botToken = val;
         } else if (key === "SERPENT_CHAT_ID") {
           chatId = val;
+        } else if (key === "SERPENT_NOTIFICATIONS") {
+          notifications = val.toLowerCase() === "true";
         }
       }
       if (botToken && chatId) {
@@ -378,6 +381,7 @@ function execFileAsync(cmd: string, args: string[]): Promise<void> {
 // --- Status bar ---
 
 function showStatus(msg: string, ms = 2000): void {
+  if (!notifications) { return; }
   const item = vscode.window.setStatusBarMessage(msg);
   setTimeout(() => item.dispose(), ms);
 }
