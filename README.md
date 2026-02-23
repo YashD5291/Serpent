@@ -15,7 +15,8 @@ Silently send Jupyter notebook cells, coding problems, and files to Telegram. No
 
 ```sh
 cd Serpent
-./install.sh
+./install.sh        # Mac / Linux
+install.bat         # Windows
 ```
 
 That's it. On first use, Serpent will prompt you for your bot token and chat ID — no manual `.env` needed.
