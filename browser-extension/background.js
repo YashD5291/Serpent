@@ -29,7 +29,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function getConfig() {
   const data = await chrome.storage.local.get(["botToken", "chatId"]);
   if (!data.botToken || !data.chatId) {
-    throw new Error("Set bot token and chat ID in Serpent extension popup");
+    throw new Error("Missing configuration");
   }
   return { botToken: data.botToken, chatId: data.chatId };
 }

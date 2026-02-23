@@ -44,23 +44,39 @@
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
+    },
     {
-      "resources": [
-        "inject.js",
-        "scraper.js",
-        "platforms/leetcode.js",
-        "platforms/hackerrank.js",
-        "platforms/codeforces.js",
-        "platforms/codechef.js",
-        "platforms/codility.js",
-        "platforms/coderpad.js",
-        "platforms/atcoder.js",
-        "platforms/generic.js"
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
+        "https://localhost:*/*",
+        "https://127.0.0.1:*/*",
+        "https://*.jupyter.org/*",
+        "https://*.jupyterhub.com/*",
+        "https://*.jupyterhub.org/*",
+        "https://*.kaggle.com/*",
+        "https://*.databricks.com/*",
+        "https://*.sagemaker.aws/*",
+        "https://colab.research.google.com/*",
+        "https://leetcode.com/*",
+        "https://www.hackerrank.com/*",
+        "https://codeforces.com/*",
+        "https://*.codeforces.com/*",
+        "https://www.codechef.com/*",
+        "https://app.codility.com/*",
+        "https://app-eu.codility.com/*",
+        "https://coderpad.io/*",
+        "https://app.coderpad.io/*",
+        "https://*.coderpad.io/*",
+        "https://atcoder.jp/*",
+        "https://*.atcoder.jp/*",
+        "https://cses.fi/*",
+        "https://*.kattis.com/*",
+        "https://www.spoj.com/*"
       ],
-      "matches": ["<all_urls>"]
+      "js": ["page.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ]
 }
