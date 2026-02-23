@@ -3,6 +3,5 @@ node_modules/
 *.vsix
 .vscode-test/
 .env
-browser-extension/cfg.js
 .history/
 .ipynb_checkpoints/
