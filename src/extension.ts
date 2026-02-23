@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { execFile } from "child_process";
-import { writeFile, unlink, readFile } from "fs/promises";
+import { writeFile, unlink, readFile, access, appendFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, basename } from "path";
 import * as https from "https";
@@ -54,6 +54,53 @@ async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
     }
   }
   envLoaded = true;
+}
+
+async function promptForCredentials(context: vscode.ExtensionContext): Promise<boolean> {
+  const token = await vscode.window.showInputBox({
+    title: "Serpent Setup (1/2)",
+    prompt: "Enter your Telegram bot token",
+    placeHolder: "123456:ABC-DEF...",
+    ignoreFocusOut: true,
+    password: true,
+  });
+  if (!token) { return false; }
+
+  const chat = await vscode.window.showInputBox({
+    title: "Serpent Setup (2/2)",
+    prompt: "Enter your Telegram chat ID",
+    placeHolder: "-1001234567890",
+    ignoreFocusOut: true,
+  });
+  if (!chat) { return false; }
+
+  // Determine where to save
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  const envPath = workspaceFolders
+    ? join(workspaceFolders[0].uri.fsPath, ".env")
+    : join(context.extensionPath, ".env");
+
+  // Append or create .env
+  let exists = false;
+  try { await access(envPath); exists = true; } catch {}
+
+  const lines = [
+    ...(exists ? [""] : []), // blank line separator if appending
+    `SERPENT_BOT_TOKEN=${token}`,
+    `SERPENT_CHAT_ID=${chat}`,
+    `SERPENT_NOTIFICATIONS=false`,
+    "",
+  ].join("\n");
+
+  if (exists) {
+    await appendFile(envPath, lines);
+  } else {
+    await writeFile(envPath, lines.trimStart());
+  }
+
+  botToken = token;
+  chatId = chat;
+  return true;
 }
 
 function requireTelegramConfig(): boolean {
@@ -398,7 +445,11 @@ function escapeHtml(text: string): string {
 // --- Activation ---
 
 export function activate(context: vscode.ExtensionContext): void {
-  const envReady = loadEnv(context);
+  const envReady = loadEnv(context).then(async () => {
+    if (!botToken || !chatId) {
+      await promptForCredentials(context);
+    }
+  });
 
   // Watch .env files for hot-reload
   const watcher = vscode.workspace.createFileSystemWatcher("**/.env");

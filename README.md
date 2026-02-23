@@ -15,15 +15,18 @@ Silently send Jupyter notebook cells, coding problems, and files to Telegram. No
 
 ```sh
 cd Serpent
-npm install
-npm run compile
-npx @vscode/vsce package
-code --install-extension serpent-0.1.0.vsix
+./install.sh
 ```
 
-Or manually: **Extensions** > **...** > **Install from VSIX** > select the `.vsix` file.
+That's it. On first use, Serpent will prompt you for your bot token and chat ID — no manual `.env` needed.
 
-Create a `.env` file in your workspace root (or the extension directory):
+**Manual install** (if you prefer):
+
+```sh
+npm install && npm run compile && npx @vscode/vsce package && code --install-extension serpent-0.1.0.vsix
+```
+
+You can also create a `.env` in your workspace root instead of using the setup prompt:
 
 ```
 SERPENT_BOT_TOKEN=your_bot_token_here
@@ -31,7 +34,7 @@ SERPENT_CHAT_ID=your_chat_id_here
 SERPENT_NOTIFICATIONS=false
 ```
 
-Reload VS Code. The `.env` hot-reloads on save.
+The `.env` hot-reloads on save.
 
 ### 3. Browser Extension (Chrome)
 
