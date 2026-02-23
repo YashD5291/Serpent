@@ -24,5 +24,5 @@ call code --install-extension serpent.vsix --force
 del /f serpent.vsix 2>nul
 
 echo.
-echo Done! Serpent is installed.
-echo Reload VS Code and it will prompt you for your Telegram credentials on first use.
+echo Done! Serpent is installed. Reloading VS Code...
+call code --command workbench.action.reloadWindow 2>nul || echo Please reload VS Code manually (Ctrl+Shift+P ^> Reload Window).
