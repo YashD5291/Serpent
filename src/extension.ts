@@ -2,13 +2,14 @@ import * as vscode from "vscode";
 import { execFile } from "child_process";
 import { writeFile, unlink, readFile } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, basename } from "path";
 import * as https from "https";
 
 // --- .env loader ---
 
 let botToken = "";
 let chatId = "";
+let envLoaded = false;
 
 async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -42,15 +43,28 @@ async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
         }
       }
       if (botToken && chatId) {
+        envLoaded = true;
         return;
       }
     } catch {
       // file not found, try next
     }
   }
+  envLoaded = true;
+}
+
+function requireTelegramConfig(): boolean {
+  if (!botToken || !chatId) {
+    showStatus("Serpent: Set SERPENT_BOT_TOKEN and SERPENT_CHAT_ID in .env, then reload", 4000);
+    return false;
+  }
+  return true;
 }
 
 // --- Telegram API ---
+
+const TELEGRAM_TIMEOUT_MS = 15000;
+const TELEGRAM_MSG_LIMIT = 4096;
 
 function telegramRequest(
   method: string,
@@ -60,94 +74,118 @@ function telegramRequest(
   return new Promise((resolve, reject) => {
     const url = `https://api.telegram.org/bot${botToken}/${method}`;
 
+    let body: Buffer;
+    let headers: Record<string, string | number>;
+
     if (!fileField) {
-      const body = JSON.stringify(payload);
-      const req = https.request(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      }, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.ok) {
-              resolve(parsed);
-            } else {
-              reject(new Error(parsed.description || "Telegram API error"));
-            }
-          } catch {
-            reject(new Error("Invalid response from Telegram"));
-          }
-        });
-      });
-      req.on("error", reject);
-      req.write(body);
-      req.end();
+      const json = JSON.stringify(payload);
+      body = Buffer.from(json);
+      headers = {
+        "Content-Type": "application/json",
+        "Content-Length": body.length,
+      };
     } else {
-      const boundary = `----SerpentBoundary${Date.now()}`;
+      const boundary = `----SerpentBoundary${Date.now()}${Math.random().toString(36).slice(2)}`;
       const parts: Buffer[] = [];
 
-      // Add text fields
       for (const [key, val] of Object.entries(payload)) {
         parts.push(Buffer.from(
           `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}\r\n`
         ));
       }
 
-      // Add file field
       parts.push(Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="${fileField.field}"; filename="${fileField.filename}"\r\nContent-Type: ${fileField.mime}\r\n\r\n`
       ));
       parts.push(fileField.data);
       parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
 
-      const body = Buffer.concat(parts);
-
-      const req = https.request(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": `multipart/form-data; boundary=${boundary}`,
-          "Content-Length": body.length,
-        },
-      }, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.ok) {
-              resolve(parsed);
-            } else {
-              reject(new Error(parsed.description || "Telegram API error"));
-            }
-          } catch {
-            reject(new Error("Invalid response from Telegram"));
-          }
-        });
-      });
-      req.on("error", reject);
-      req.write(body);
-      req.end();
+      body = Buffer.concat(parts);
+      headers = {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": body.length,
+      };
     }
+
+    const req = https.request(url, { method: "POST", headers }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.ok) {
+            resolve(parsed);
+          } else {
+            reject(new Error(parsed.description || `Telegram error (${res.statusCode})`));
+          }
+        } catch {
+          reject(new Error(`Telegram returned invalid response (${res.statusCode})`));
+        }
+      });
+    });
+
+    req.setTimeout(TELEGRAM_TIMEOUT_MS, () => {
+      req.destroy();
+      reject(new Error("Telegram request timed out"));
+    });
+
+    req.on("error", (err) => {
+      if (err.message.includes("ENOTFOUND") || err.message.includes("ENETUNREACH")) {
+        reject(new Error("No network connection"));
+      } else {
+        reject(err);
+      }
+    });
+
+    req.write(body);
+    req.end();
   });
 }
 
 async function sendTextToTelegram(text: string): Promise<void> {
-  await telegramRequest("sendMessage", {
-    chat_id: chatId,
-    text: text,
-    parse_mode: "HTML",
-  });
+  // Telegram has a 4096 char limit per message — split if needed
+  const chunks = splitMessage(text, TELEGRAM_MSG_LIMIT);
+  for (const chunk of chunks) {
+    await telegramRequest("sendMessage", {
+      chat_id: chatId,
+      text: chunk,
+      parse_mode: "HTML",
+    });
+  }
+}
+
+function splitMessage(text: string, limit: number): string[] {
+  if (text.length <= limit) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= limit) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try to split at a newline near the limit
+    let splitAt = remaining.lastIndexOf("\n", limit);
+    if (splitAt < limit * 0.5) {
+      // No good newline — split at limit
+      splitAt = limit;
+    }
+
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt);
+  }
+
+  return chunks;
 }
 
 async function sendImageToTelegram(data: Buffer, caption?: string): Promise<void> {
   const payload: Record<string, string> = { chat_id: chatId };
   if (caption) {
-    payload.caption = caption;
+    payload.caption = caption.slice(0, 1024); // Telegram caption limit
     payload.parse_mode = "HTML";
   }
   await telegramRequest("sendPhoto", payload, {
@@ -156,6 +194,23 @@ async function sendImageToTelegram(data: Buffer, caption?: string): Promise<void
     data: data,
     mime: "image/png",
   });
+}
+
+// --- Send lock (prevent double-sends from rapid key presses) ---
+
+let sending = false;
+
+async function withSendLock<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  if (sending) {
+    showStatus("Serpent: Already sending...");
+    return undefined;
+  }
+  sending = true;
+  try {
+    return await fn();
+  } finally {
+    sending = false;
+  }
 }
 
 // --- Cell helpers ---
@@ -184,11 +239,20 @@ function extractTextOutput(cell: vscode.NotebookCell): string {
       const mime = item.mime;
 
       if (mime.startsWith("image/")) {
-        continue; // handled separately
+        continue;
       } else if (mime === "application/vnd.code.notebook.error") {
         try {
           const err = JSON.parse(Buffer.from(item.data).toString("utf-8"));
-          parts.push(`${err.ename}: ${err.evalue}`);
+          const lines: string[] = [`${err.ename}: ${err.evalue}`];
+          if (Array.isArray(err.traceback) && err.traceback.length > 0) {
+            // Strip ANSI escape codes from traceback
+            lines.push(
+              ...err.traceback.map((line: string) =>
+                line.replace(/\x1b\[[0-9;]*m/g, "")
+              )
+            );
+          }
+          parts.push(lines.join("\n"));
         } catch {
           parts.push(Buffer.from(item.data).toString("utf-8"));
         }
@@ -215,7 +279,15 @@ function extractCellOutput(cell: vscode.NotebookCell): string {
       } else if (mime === "application/vnd.code.notebook.error") {
         try {
           const err = JSON.parse(text);
-          parts.push(`${err.ename}: ${err.evalue}`);
+          const lines: string[] = [`${err.ename}: ${err.evalue}`];
+          if (Array.isArray(err.traceback) && err.traceback.length > 0) {
+            lines.push(
+              ...err.traceback.map((line: string) =>
+                line.replace(/\x1b\[[0-9;]*m/g, "")
+              )
+            );
+          }
+          parts.push(lines.join("\n"));
         } catch {
           parts.push(text);
         }
@@ -267,7 +339,7 @@ function extractFirstImage(cell: vscode.NotebookCell): Uint8Array | undefined {
 // --- Clipboard helpers ---
 
 async function copyImageToClipboard(data: Uint8Array): Promise<void> {
-  const tmpPath = join(tmpdir(), `serpent-${Date.now()}.png`);
+  const tmpPath = join(tmpdir(), `serpent-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
   await writeFile(tmpPath, data);
 
   try {
@@ -292,13 +364,14 @@ async function copyImageToClipboard(data: Uint8Array): Promise<void> {
 
 function execFileAsync(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, (err) => {
+    const cp = execFile(cmd, args, { timeout: 10000 }, (err) => {
       if (err) {
         reject(err);
       } else {
         resolve();
       }
     });
+    cp.on("error", reject);
   });
 }
 
@@ -309,50 +382,61 @@ function showStatus(msg: string, ms = 2000): void {
   setTimeout(() => item.dispose(), ms);
 }
 
+// --- HTML escape ---
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // --- Activation ---
 
 export function activate(context: vscode.ExtensionContext): void {
-  loadEnv(context);
+  const envReady = loadEnv(context);
+
+  // Watch .env files for hot-reload
+  const watcher = vscode.workspace.createFileSystemWatcher("**/.env");
+  watcher.onDidChange(() => loadEnv(context));
+  watcher.onDidCreate(() => loadEnv(context));
+  context.subscriptions.push(watcher);
 
   context.subscriptions.push(
-    // Ctrl+Shift+C — send to Telegram
+    // Ctrl+Shift+C (notebook) — send cell to Telegram
     vscode.commands.registerCommand("serpent.copyCell", async () => {
+      await envReady;
       const cell = getActiveCell();
       if (!cell) {
         showStatus("Serpent: No cell selected");
         return;
       }
+      if (!requireTelegramConfig()) { return; }
 
-      if (!botToken || !chatId) {
-        showStatus("Serpent: Missing SERPENT_BOT_TOKEN or SERPENT_CHAT_ID in .env", 4000);
-        return;
-      }
+      await withSendLock(async () => {
+        const code = extractCellCode(cell);
+        const textOutput = extractTextOutput(cell);
+        const images = extractAllImages(cell);
 
-      const code = extractCellCode(cell);
-      const textOutput = extractTextOutput(cell);
-      const images = extractAllImages(cell);
+        showStatus("🐍 Sending to Telegram...");
 
-      showStatus("🐍 Sending to Telegram...");
+        try {
+          let message = `<b>Code</b>\n<pre>${escapeHtml(code)}</pre>`;
+          if (textOutput) {
+            message += `\n\n<b>Output</b>\n<pre>${escapeHtml(textOutput)}</pre>`;
+          }
 
-      try {
-        // Build the text message
-        let message = `<b>Code</b>\n<pre>${escapeHtml(code)}</pre>`;
-        if (textOutput) {
-          message += `\n\n<b>Output</b>\n<pre>${escapeHtml(textOutput)}</pre>`;
+          await sendTextToTelegram(message);
+
+          for (const img of images) {
+            await sendImageToTelegram(img);
+          }
+
+          showStatus("🐍 Sent to Telegram!");
+        } catch (err: any) {
+          showStatus(`Serpent: ${err.message}`, 4000);
         }
-
-        // Send text message
-        await sendTextToTelegram(message);
-
-        // Send each image
-        for (const img of images) {
-          await sendImageToTelegram(img);
-        }
-
-        showStatus("🐍 Sent to Telegram!");
-      } catch (err: any) {
-        showStatus(`Serpent: Telegram error — ${err.message}`, 4000);
-      }
+      });
     }),
 
     // Code only → clipboard
@@ -369,16 +453,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Output only → send to Telegram
     vscode.commands.registerCommand("serpent.copyCellOutputOnly", async () => {
+      await envReady;
       const cell = getActiveCell();
       if (!cell) {
         showStatus("Serpent: No cell selected");
         return;
       }
-
-      if (!botToken || !chatId) {
-        showStatus("Serpent: Missing SERPENT_BOT_TOKEN or SERPENT_CHAT_ID in .env", 4000);
-        return;
-      }
+      if (!requireTelegramConfig()) { return; }
 
       const textOutput = extractTextOutput(cell);
       const images = extractAllImages(cell);
@@ -389,37 +470,36 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      showStatus("🐍 Sending output to Telegram...");
+      await withSendLock(async () => {
+        showStatus("🐍 Sending output to Telegram...");
 
-      try {
-        if (textOutput) {
-          await sendTextToTelegram(`<pre>${escapeHtml(textOutput)}</pre>`);
+        try {
+          if (textOutput) {
+            await sendTextToTelegram(`<pre>${escapeHtml(textOutput)}</pre>`);
+          }
+
+          for (const img of images) {
+            await sendImageToTelegram(img);
+          }
+
+          showStatus("🐍 Output sent to Telegram!");
+        } catch (err: any) {
+          showStatus(`Serpent: ${err.message}`, 4000);
         }
-
-        for (const img of images) {
-          await sendImageToTelegram(img);
-        }
-
-        showStatus("🐍 Output sent to Telegram!");
-      } catch (err: any) {
-        showStatus(`Serpent: Telegram error — ${err.message}`, 4000);
-      }
+      });
     }),
 
     // Send entire file to Telegram
     vscode.commands.registerCommand("serpent.sendFile", async () => {
+      await envReady;
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         showStatus("Serpent: No file open");
         return;
       }
+      if (!requireTelegramConfig()) { return; }
 
-      if (!botToken || !chatId) {
-        showStatus("Serpent: Missing SERPENT_BOT_TOKEN or SERPENT_CHAT_ID in .env", 4000);
-        return;
-      }
-
-      const fileName = editor.document.fileName.split("/").pop() || "file";
+      const fileName = basename(editor.document.fileName) || "file";
       const content = editor.document.getText();
 
       if (!content.trim()) {
@@ -427,28 +507,28 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      showStatus("🐍 Sending file to Telegram...");
+      await withSendLock(async () => {
+        showStatus("🐍 Sending file to Telegram...");
 
-      try {
-        // Telegram message limit is 4096 chars. Send as document if too long.
-        const message = `<b>${escapeHtml(fileName)}</b>\n<pre>${escapeHtml(content)}</pre>`;
+        try {
+          const message = `<b>${escapeHtml(fileName)}</b>\n<pre>${escapeHtml(content)}</pre>`;
 
-        if (message.length <= 4096) {
-          await sendTextToTelegram(message);
-        } else {
-          // Send as a document file
-          await telegramRequest("sendDocument", { chat_id: chatId }, {
-            field: "document",
-            filename: fileName,
-            data: Buffer.from(content, "utf-8"),
-            mime: "text/plain",
-          });
+          if (message.length <= TELEGRAM_MSG_LIMIT) {
+            await sendTextToTelegram(message);
+          } else {
+            await telegramRequest("sendDocument", { chat_id: chatId }, {
+              field: "document",
+              filename: fileName,
+              data: Buffer.from(content, "utf-8"),
+              mime: "text/plain",
+            });
+          }
+
+          showStatus("🐍 File sent to Telegram!");
+        } catch (err: any) {
+          showStatus(`Serpent: ${err.message}`, 4000);
         }
-
-        showStatus("🐍 File sent to Telegram!");
-      } catch (err: any) {
-        showStatus(`Serpent: Telegram error — ${err.message}`, 4000);
-      }
+      });
     }),
 
     // Image → system clipboard
@@ -473,13 +553,6 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 export function deactivate(): void {}
