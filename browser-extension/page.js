@@ -65,9 +65,16 @@
   }
 
   function getLabCell() {
+    // Find the active notebook first (matters when multiple notebooks are open)
+    var notebook =
+      document.querySelector(".jp-Notebook.jp-mod-active") ||
+      document.querySelector(".jp-Notebook:focus-within") ||
+      document.querySelector(".jp-Notebook");
+    var scope = notebook || document;
+
     var activeCell =
-      document.querySelector(".jp-Cell.jp-mod-active") ||
-      document.querySelector(".jp-Cell.jp-mod-selected");
+      scope.querySelector(".jp-Cell.jp-mod-active") ||
+      scope.querySelector(".jp-Cell.jp-mod-selected");
     if (!activeCell) return null;
 
     var codeEl = activeCell.querySelector(".jp-InputArea .jp-Editor .cm-content, .jp-InputArea .CodeMirror");
