@@ -127,7 +127,7 @@
   document.addEventListener("keydown", function (e) {
     var jupyter = isJupyter();
 
-    if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyC") {
+    if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "Semicolon") {
       e.preventDefault();
       e.stopPropagation();
       jupyter ? sendCell() : sendProblem();

@@ -42,8 +42,8 @@
     "keybindings": [
       {
         "command": "serpent.copyCell",
-        "key": "ctrl+shift+c",
-        "mac": "ctrl+shift+c",
+        "key": "ctrl+shift+;",
+        "mac": "ctrl+shift+;",
         "when": "notebookEditorFocused"
       },
       {
@@ -66,8 +66,8 @@
       },
       {
         "command": "serpent.sendFile",
-        "key": "ctrl+shift+c",
-        "mac": "ctrl+shift+c",
+        "key": "ctrl+shift+;",
+        "mac": "ctrl+shift+;",
         "when": "editorTextFocus && !notebookEditorFocused"
       }
     ]

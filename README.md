@@ -1,6 +1,6 @@
 # Serpent
 
-Silently send Jupyter notebook cells, outputs, and files to Telegram from VS Code or the browser. No flashing, no popups, no noise.
+Silently send Jupyter notebook cells, coding problems, and files to Telegram. No flashing, no popups, no DOM traces.
 
 ## Setup
 
@@ -40,30 +40,26 @@ Reload VS Code. The `.env` hot-reloads on save.
 3. Click **Load unpacked** > select the `browser-extension/` folder
 4. Click the Serpent icon in the toolbar > enter your bot token and chat ID
 
-Works with Jupyter Classic, JupyterLab, Notebook 7, and hosted instances (localhost, JupyterHub, Kaggle, Databricks, SageMaker).
+## What It Does
 
-## Keybindings
+`Ctrl+Shift+;` is the only command you need. It auto-detects your context:
 
-### In Jupyter Notebooks (VS Code & Browser)
+| Context | What gets sent to Telegram |
+|---|---|
+| Jupyter notebook (VS Code) | Cell code + output + images |
+| Jupyter notebook (browser) | Cell code + output + images |
+| Coding platform problem page | Full problem statement |
+| Regular file (VS Code) | Entire file content |
 
-| Command | Windows/Linux | Mac | Action |
-|---|---|---|---|
-| Send Cell | `Ctrl+Shift+C` | `Ctrl+Shift+C` | Send code + output + images to Telegram |
-| Copy Code | `Ctrl+Shift+Alt+C` | `Ctrl+Shift+Option+C` | Copy code to clipboard |
-| Send Output | `Ctrl+Shift+Alt+O` | `Ctrl+Shift+Option+O` | Send output only to Telegram |
-| Copy Image | `Ctrl+Shift+Alt+I` | `Ctrl+Shift+Option+I` | Copy image to system clipboard (VS Code only) |
+### Supported Platforms
 
-### In Regular Files (VS Code only)
+**Jupyter notebooks:** localhost, JupyterHub, Kaggle, Databricks, SageMaker, Google Colab, CoderPad (notebook mode)
 
-| Command | Windows/Linux | Mac | Action |
-|---|---|---|---|
-| Send File | `Ctrl+Shift+C` | `Ctrl+Shift+C` | Send entire file to Telegram |
-
-Small files are sent as formatted messages. Large files (>4096 chars) are sent as document attachments.
+**Coding platforms:** LeetCode, HackerRank, Codeforces, CodeChef, Codility, CoderPad, AtCoder, CSES, Kattis, SPOJ
 
 ## Configuration
 
-All settings go in `.env`:
+All settings go in `.env` (VS Code) or the extension popup (browser):
 
 | Variable | Default | Description |
 |---|---|---|
@@ -74,4 +70,4 @@ All settings go in `.env`:
 ## Requirements
 
 - VS Code 1.75+ (for the VS Code extension)
-- Chrome or Chromium-based browser (for the browser extension)
+- Chrome 111+ or Chromium-based browser (for the browser extension)
