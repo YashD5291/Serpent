@@ -131,10 +131,14 @@ function telegramRequest(
           if (parsed.ok) {
             resolve(parsed);
           } else {
-            reject(new Error(parsed.description || `Telegram error (${res.statusCode})`));
+            const err: any = new Error(parsed.description || `Telegram error (${res.statusCode})`);
+            err.statusCode = res.statusCode;
+            reject(err);
           }
         } catch {
-          reject(new Error(`Telegram returned invalid response (${res.statusCode})`));
+          const err: any = new Error(`Telegram returned invalid response (${res.statusCode})`);
+          err.statusCode = res.statusCode;
+          reject(err);
         }
       });
     });
@@ -152,20 +156,60 @@ function telegramRequest(
       }
     });
 
-    req.write(body);
-    req.end();
+    try {
+      req.write(body);
+      req.end();
+    } catch (writeErr) {
+      req.destroy();
+      reject(writeErr);
+    }
   });
 }
 
+function isRetryable(err: any): boolean {
+  // Network errors
+  if (err.message && (
+    err.message.includes("ENOTFOUND") ||
+    err.message.includes("ENETUNREACH") ||
+    err.message.includes("timed out") ||
+    err.message.includes("No network connection")
+  )) {
+    return true;
+  }
+  // Server errors (5xx) and rate limits (429)
+  const code = err.statusCode;
+  if (code && (code === 429 || (code >= 500 && code < 600))) {
+    return true;
+  }
+  return false;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    if (isRetryable(err)) {
+      await delay(2000);
+      return await fn();
+    }
+    throw err;
+  }
+}
+
 async function sendTextToTelegram(text: string): Promise<void> {
-  // Telegram has a 4096 char limit per message — split if needed
   const chunks = splitMessage(text, TELEGRAM_MSG_LIMIT);
   for (const chunk of chunks) {
-    await telegramRequest("sendMessage", {
-      chat_id: chatId,
-      text: chunk,
-      parse_mode: "HTML",
-    });
+    await withRetry(() =>
+      telegramRequest("sendMessage", {
+        chat_id: chatId,
+        text: chunk,
+        parse_mode: "HTML",
+      })
+    );
   }
 }
 
@@ -254,15 +298,17 @@ function getUnclosedTags(chunk: string, priorOpen: string[]): string[] {
 async function sendImageToTelegram(data: Buffer, caption?: string): Promise<void> {
   const payload: Record<string, string> = { chat_id: chatId };
   if (caption) {
-    payload.caption = caption.slice(0, 1024); // Telegram caption limit
+    payload.caption = caption.slice(0, 1024);
     payload.parse_mode = "HTML";
   }
-  await telegramRequest("sendPhoto", payload, {
-    field: "photo",
-    filename: "output.png",
-    data: data,
-    mime: "image/png",
-  });
+  await withRetry(() =>
+    telegramRequest("sendPhoto", payload, {
+      field: "photo",
+      filename: "output.png",
+      data: data,
+      mime: "image/png",
+    })
+  );
 }
 
 // --- Send lock (prevent double-sends from rapid key presses) ---
@@ -586,12 +632,12 @@ export function activate(context: vscode.ExtensionContext): void {
           if (message.length <= TELEGRAM_MSG_LIMIT) {
             await sendTextToTelegram(message);
           } else {
-            await telegramRequest("sendDocument", { chat_id: chatId }, {
+            await withRetry(() => telegramRequest("sendDocument", { chat_id: chatId }, {
               field: "document",
               filename: fileName,
               data: Buffer.from(content, "utf-8"),
               mime: "text/plain",
-            });
+            }));
           }
 
           showStatus("🐍 File sent to Telegram!");
