@@ -28,7 +28,8 @@
         return;
       }
       if (++channelRetries > 50) {
-        resolve(); // give up silently
+        console.warn("serpent: page script not loaded");
+        resolve();
         return;
       }
       setTimeout(check, 100);
@@ -88,34 +89,38 @@
   // --- Actions ---
 
   async function sendCell() {
-    if (sending || !channels) return;
+    if (!channels) return;
+    if (sending) { console.warn("serpent: send already in progress"); return; }
     sending = true;
     try {
       var d = await request(channels.a, channels.b, 3000);
-      if (!d) return;
+      if (!d || !d.code) return;
       var msg = "<b>Code</b>\n<pre>" + esc(d.code) + "</pre>";
-      var out = d.outputs.join("\n").trim();
-      if (out) msg += "\n\n<b>Output</b>\n<pre>" + esc(out) + "</pre>";
+      var outs = (d.outputs || []).join("\n").trim();
+      if (outs) msg += "\n\n<b>Output</b>\n<pre>" + esc(outs) + "</pre>";
       await bg({ type: "ext:pushText", text: msg });
-      for (var i = 0; i < d.images.length; i++) {
-        await bg({ type: "ext:pushImage", base64: d.images[i] });
+      var imgs = d.images || [];
+      for (var i = 0; i < imgs.length; i++) {
+        await bg({ type: "ext:pushImage", base64: imgs[i] });
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.warn("serpent: sendCell failed", e); }
     finally { sending = false; }
   }
 
   async function sendOutput() {
-    if (sending || !channels) return;
+    if (!channels) return;
+    if (sending) { console.warn("serpent: send already in progress"); return; }
     sending = true;
     try {
       var d = await request(channels.a, channels.b, 3000);
       if (!d) return;
-      var out = d.outputs.join("\n").trim();
-      if (out) await bg({ type: "ext:pushText", text: "<pre>" + esc(out) + "</pre>" });
-      for (var i = 0; i < d.images.length; i++) {
-        await bg({ type: "ext:pushImage", base64: d.images[i] });
+      var outs = (d.outputs || []).join("\n").trim();
+      if (outs) await bg({ type: "ext:pushText", text: "<pre>" + esc(outs) + "</pre>" });
+      var imgs = d.images || [];
+      for (var i = 0; i < imgs.length; i++) {
+        await bg({ type: "ext:pushImage", base64: imgs[i] });
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.warn("serpent: sendOutput failed", e); }
     finally { sending = false; }
   }
 
@@ -123,18 +128,19 @@
     if (!channels) return;
     try {
       var d = await request(channels.a, channels.b, 3000);
-      if (d) await navigator.clipboard.writeText(d.code);
-    } catch (e) { /* silent */ }
+      if (d && d.code) await navigator.clipboard.writeText(d.code);
+    } catch (e) { console.warn("serpent: copyCode failed", e); }
   }
 
   async function sendProblem() {
-    if (sending || !channels) return;
+    if (!channels) return;
+    if (sending) { console.warn("serpent: send already in progress"); return; }
     sending = true;
     try {
       var d = await request(channels.c, channels.d, 5000);
-      if (!d) return;
+      if (!d || !d.body) return;
       await bg({ type: "ext:pushText", text: "<pre>" + esc(d.body) + "</pre>" });
-    } catch (e) { /* silent */ }
+    } catch (e) { console.warn("serpent: sendProblem failed", e); }
     finally { sending = false; }
   }
 
@@ -142,8 +148,8 @@
     if (!channels) return;
     try {
       var d = await request(channels.c, channels.d, 5000);
-      if (d) await navigator.clipboard.writeText(d.body);
-    } catch (e) { /* silent */ }
+      if (d && d.body) await navigator.clipboard.writeText(d.body);
+    } catch (e) { console.warn("serpent: copyProblem failed", e); }
   }
 
   // --- Keybindings ---
