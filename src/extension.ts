@@ -21,51 +21,58 @@ let botToken = _d(_et, _k);
 let chatId = _d(_ec, _k);
 let notifications = false;
 let envLoaded = false;
+let envLoading = false;
 
 async function loadEnv(context: vscode.ExtensionContext): Promise<void> {
-  // 1. Try .env files (workspace roots + extension dir)
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  const searchPaths: string[] = [];
+  if (envLoading) { return; }
+  envLoading = true;
+  try {
+    // 1. Try .env files (workspace roots + extension dir)
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const searchPaths: string[] = [];
 
-  if (workspaceFolders) {
-    for (const folder of workspaceFolders) {
-      searchPaths.push(join(folder.uri.fsPath, ".env"));
-    }
-  }
-  searchPaths.push(join(context.extensionPath, ".env"));
-
-  for (const envPath of searchPaths) {
-    try {
-      const content = await readFile(envPath, "utf-8");
-      for (const line of content.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) {
-          continue;
-        }
-        const eqIdx = trimmed.indexOf("=");
-        if (eqIdx === -1) {
-          continue;
-        }
-        const key = trimmed.slice(0, eqIdx).trim();
-        const val = trimmed.slice(eqIdx + 1).trim();
-        if (key === "SERPENT_BOT_TOKEN") {
-          botToken = val;
-        } else if (key === "SERPENT_CHAT_ID") {
-          chatId = val;
-        } else if (key === "SERPENT_NOTIFICATIONS") {
-          notifications = val.toLowerCase() === "true";
-        }
+    if (workspaceFolders) {
+      for (const folder of workspaceFolders) {
+        searchPaths.push(join(folder.uri.fsPath, ".env"));
       }
-      if (botToken && chatId) {
-        envLoaded = true;
-        return;
-      }
-    } catch {
-      // file not found, try next
     }
-  }
+    searchPaths.push(join(context.extensionPath, ".env"));
 
-  envLoaded = true;
+    for (const envPath of searchPaths) {
+      try {
+        const content = await readFile(envPath, "utf-8");
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) {
+            continue;
+          }
+          const eqIdx = trimmed.indexOf("=");
+          if (eqIdx === -1) {
+            continue;
+          }
+          const key = trimmed.slice(0, eqIdx).trim();
+          const val = trimmed.slice(eqIdx + 1).trim();
+          if (key === "SERPENT_BOT_TOKEN" && val) {
+            botToken = val;
+          } else if (key === "SERPENT_CHAT_ID" && val) {
+            chatId = val;
+          } else if (key === "SERPENT_NOTIFICATIONS") {
+            notifications = val.toLowerCase() === "true";
+          }
+        }
+        if (botToken && chatId) {
+          envLoaded = true;
+          return;
+        }
+      } catch {
+        // file not found, try next
+      }
+    }
+
+    envLoaded = true;
+  } finally {
+    envLoading = false;
+  }
 }
 
 function requireTelegramConfig(): boolean {
@@ -339,7 +346,11 @@ function getActiveCell(): vscode.NotebookCell | undefined {
   if (!selection || selection.isEmpty) {
     return undefined;
   }
-  return editor.notebook.cellAt(selection.start);
+  try {
+    return editor.notebook.cellAt(selection.start);
+  } catch {
+    return undefined;
+  }
 }
 
 function extractCellCode(cell: vscode.NotebookCell): string {
@@ -358,7 +369,7 @@ function extractTextOutput(cell: vscode.NotebookCell): string {
       } else if (mime === "application/vnd.code.notebook.error") {
         try {
           const err = JSON.parse(Buffer.from(item.data).toString("utf-8"));
-          const lines: string[] = [`${err.ename}: ${err.evalue}`];
+          const lines: string[] = [`${err.ename || "Error"}: ${err.evalue || ""}`];
           if (Array.isArray(err.traceback) && err.traceback.length > 0) {
             // Strip ANSI escape codes from traceback
             lines.push(
@@ -394,7 +405,7 @@ function extractCellOutput(cell: vscode.NotebookCell): string {
       } else if (mime === "application/vnd.code.notebook.error") {
         try {
           const err = JSON.parse(text);
-          const lines: string[] = [`${err.ename}: ${err.evalue}`];
+          const lines: string[] = [`${err.ename || "Error"}: ${err.evalue || ""}`];
           if (Array.isArray(err.traceback) && err.traceback.length > 0) {
             lines.push(
               ...err.traceback.map((line: string) =>
