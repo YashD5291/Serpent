@@ -182,16 +182,21 @@
     var m = location.pathname.match(/\/problems\/([^/]+)/);
     if (!m) return scrapeLeetCodeDOM();
     try {
+      var controller = new AbortController();
+      var timeout = setTimeout(function () { controller.abort(); }, 3000);
       var res = await fetch("/graphql", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
+        signal: controller.signal,
         body: JSON.stringify({
           query: "query q($s:String!){question(titleSlug:$s){title difficulty content sampleTestCase}}",
           variables: { s: m[1] },
         }),
       });
+      clearTimeout(timeout);
       var json = await res.json();
+      if (!json.data || !json.data.question) return scrapeLeetCodeDOM();
       var q = json.data.question;
       var div = document.createElement("div");
       div.innerHTML = q.content || "";
@@ -350,8 +355,13 @@
       }
       var fn = scrapers[platform] || scrapers.generic;
       Promise.resolve().then(function () { return fn(); }).then(function (result) {
+        if (!result) {
+          console.warn("serpent: " + platform + " scraper returned null, trying generic");
+          result = scrapeGeneric();
+        }
         window.postMessage({ t: channels.d, i: e.data.i, d: result }, "*");
       }).catch(function () {
+        console.warn("serpent: " + platform + " scraper failed, using generic");
         try {
           var fallback = scrapeGeneric();
           window.postMessage({ t: channels.d, i: e.data.i, d: fallback }, "*");
