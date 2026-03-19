@@ -21,7 +21,7 @@
     document.documentElement.removeAttribute("data-_q");
   }, 10000);
 
-  // --- Jupyter detection ---
+  // --- Notebook detection ---
 
   function isJupyter() {
     if (document.querySelector(".jp-Notebook")) return true;
@@ -29,6 +29,10 @@
     if (typeof Jupyter !== "undefined" && Jupyter.notebook) return true;
     if (document.querySelector("#notebook-container")) return true;
     return false;
+  }
+
+  function isDeepnote() {
+    return location.hostname.includes("deepnote.com");
   }
 
   // --- Jupyter cell extraction ---
@@ -153,11 +157,180 @@
     return rows.join("\n");
   }
 
+  // --- Deepnote cell extraction ---
+
+  function getDeepnoteCell() {
+    // Strategy 1: __preloadedState (published/shared notebooks)
+    if (window.__preloadedState) {
+      var store = window.__preloadedState.initialStoreData;
+      if (store && store.publishedProject && store.publishedProject.notebook) {
+        var nb = store.publishedProject.notebook;
+        var cellId = nb.cellOrder && nb.cellOrder.length > 0 ? nb.cellOrder[0] : null;
+        // Try to find the focused cell by checking which CM editor has focus
+        var focusedCm = document.querySelector(".cm-editor:focus-within .cm-content");
+        if (focusedCm) {
+          // Walk up to find a data attribute or index
+          var allEditors = document.querySelectorAll(".cm-editor");
+          for (var ei = 0; ei < allEditors.length; ei++) {
+            if (allEditors[ei].contains(focusedCm)) {
+              if (nb.cellOrder[ei]) cellId = nb.cellOrder[ei];
+              break;
+            }
+          }
+        }
+        if (cellId && nb.cells[cellId]) {
+          var cell = nb.cells[cellId];
+          if (cell.cell_type === "code") {
+            return {
+              code: cell.source || "",
+              outputs: extractDeepnoteOutputs(cell.outputs || []),
+              images: extractDeepnoteImages(cell.outputs || [])
+            };
+          }
+        }
+      }
+    }
+
+    // Strategy 2: __embed_data (embedded blocks)
+    if (window.__embed_data) {
+      return {
+        code: window.__embed_data.input || "",
+        outputs: extractDeepnoteOutputs(window.__embed_data.outputs || []),
+        images: extractDeepnoteImages(window.__embed_data.outputs || [])
+      };
+    }
+
+    // Strategy 3: Live editor — CodeMirror 6 selectors (stable library classes)
+    return getDeepnoteCellFromDOM();
+  }
+
+  function getDeepnoteCellFromDOM() {
+    // Find the focused CodeMirror 6 editor
+    var cmEditor = document.querySelector(".cm-editor:focus-within") ||
+                   (document.activeElement && document.activeElement.closest && document.activeElement.closest(".cm-editor"));
+    if (!cmEditor) {
+      // Fallback: find any cm-editor with a focused descendant
+      var allCm = document.querySelectorAll(".cm-editor");
+      for (var ci = 0; ci < allCm.length; ci++) {
+        if (allCm[ci].querySelector(":focus")) {
+          cmEditor = allCm[ci];
+          break;
+        }
+      }
+    }
+
+    var code = "";
+    if (cmEditor) {
+      var cmContent = cmEditor.querySelector(".cm-content");
+      if (cmContent) code = cmContent.textContent || "";
+    }
+
+    // Walk up from the editor to find the cell container
+    // The cell container holds both the editor and the output area
+    var cellContainer = null;
+    if (cmEditor) {
+      var el = cmEditor.parentElement;
+      // Walk up a few levels to find the block that contains both code and output
+      for (var depth = 0; el && depth < 8; depth++) {
+        // Check if this element has content beyond just the editor (i.e., output area too)
+        var pres = el.querySelectorAll("pre");
+        var hasOutputPre = false;
+        for (var pi = 0; pi < pres.length; pi++) {
+          if (!pres[pi].closest(".cm-editor")) {
+            hasOutputPre = true;
+            break;
+          }
+        }
+        if (hasOutputPre || el.querySelector("table") || el.querySelector("img") || el.querySelector(".vega-embed")) {
+          cellContainer = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+      // If no output found, use the editor's grandparent as best guess
+      if (!cellContainer && cmEditor.parentElement) {
+        cellContainer = cmEditor.parentElement.parentElement || cmEditor.parentElement;
+      }
+    }
+
+    var outputs = [];
+    var images = [];
+
+    if (cellContainer) {
+      // Text outputs: <pre> elements NOT inside the code editor
+      var preEls = cellContainer.querySelectorAll("pre");
+      for (var j = 0; j < preEls.length; j++) {
+        if (!preEls[j].closest(".cm-editor")) {
+          var txt = preEls[j].textContent || "";
+          if (txt.trim()) outputs.push(txt);
+        }
+      }
+
+      // Table outputs
+      var tables = cellContainer.querySelectorAll("table");
+      for (var k = 0; k < tables.length; k++) {
+        outputs.push(tableToText(tables[k]));
+      }
+
+      // Image outputs (data URIs and blob URLs)
+      var imgs = cellContainer.querySelectorAll("img");
+      for (var m = 0; m < imgs.length; m++) {
+        var src = imgs[m].src || "";
+        if (src.startsWith("data:image/")) {
+          var b64 = src.split(",")[1];
+          if (b64) images.push(b64);
+        }
+      }
+
+      // Vega chart indicator
+      if (cellContainer.querySelector(".vega-embed")) {
+        outputs.push("[Chart output]");
+      }
+    }
+
+    return (code || outputs.length > 0 || images.length > 0)
+      ? { code: code, outputs: outputs, images: images }
+      : null;
+  }
+
+  function extractDeepnoteOutputs(jupyterOutputs) {
+    var outputs = [];
+    for (var i = 0; i < jupyterOutputs.length; i++) {
+      var out = jupyterOutputs[i];
+      if (out.output_type === "stream") {
+        outputs.push((out.text || "").replace(/\x1b\[[0-9;]*m/g, ""));
+      }
+      if (out.output_type === "execute_result" || out.output_type === "display_data") {
+        var data = out.data || {};
+        if (data["text/plain"]) outputs.push(data["text/plain"]);
+        else if (data["text/html"]) outputs.push(data["text/html"]);
+      }
+      if (out.output_type === "error") {
+        var tb = (out.traceback || []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+        outputs.push((out.ename || "Error") + ": " + (out.evalue || "") + "\n" + tb);
+      }
+    }
+    return outputs;
+  }
+
+  function extractDeepnoteImages(jupyterOutputs) {
+    var images = [];
+    for (var i = 0; i < jupyterOutputs.length; i++) {
+      var out = jupyterOutputs[i];
+      if (out.output_type === "execute_result" || out.output_type === "display_data") {
+        var data = out.data || {};
+        if (data["image/png"]) images.push(data["image/png"]);
+      }
+    }
+    return images;
+  }
+
   // --- Platform detection ---
 
   function detectPlatform() {
     var host = location.hostname;
     if (isJupyter()) return "jupyter";
+    if (isDeepnote()) return "deepnote";
     if (host.includes("leetcode.com")) return "leetcode";
     if (host.includes("hackerrank.com")) return "hackerrank";
     if (host.includes("codeforces.com")) return "codeforces";
@@ -349,12 +522,13 @@
     if (e.data.t === channels.a) {
       var cellData = null;
       if (isJupyter()) cellData = getJupyterCell();
+      else if (isDeepnote()) cellData = getDeepnoteCell();
       window.postMessage({ t: channels.b, i: e.data.i, d: cellData }, "*");
     }
 
     if (e.data.t === channels.c) {
       var platform = detectPlatform();
-      if (platform === "jupyter") {
+      if (platform === "jupyter" || platform === "deepnote") {
         window.postMessage({ t: channels.d, i: e.data.i, d: null }, "*");
         return;
       }

@@ -86,6 +86,10 @@
     );
   }
 
+  function isNotebook() {
+    return isJupyter() || location.hostname.includes("deepnote.com");
+  }
+
   // --- Actions ---
 
   async function sendCell() {
@@ -158,24 +162,24 @@
     await channelReady;
     if (!channels) return;
 
-    var jupyter = isJupyter();
+    var notebook = isNotebook();
 
     if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "Semicolon") {
       e.preventDefault();
       e.stopPropagation();
-      jupyter ? sendCell() : sendProblem();
+      notebook ? sendCell() : sendProblem();
       return;
     }
 
     if (e.ctrlKey && e.shiftKey && e.altKey && e.code === "KeyC") {
       e.preventDefault();
       e.stopPropagation();
-      jupyter ? copyCode() : copyProblem();
+      notebook ? copyCode() : copyProblem();
       return;
     }
 
     if (e.ctrlKey && e.shiftKey && e.altKey && e.code === "KeyO") {
-      if (jupyter) {
+      if (notebook) {
         e.preventDefault();
         e.stopPropagation();
         sendOutput();
