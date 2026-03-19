@@ -16,6 +16,11 @@
   // content.js reads and removes it
   document.documentElement.setAttribute("data-_q", JSON.stringify(channels));
 
+  // Self-cleanup fallback if content.js doesn't pick it up
+  setTimeout(function () {
+    document.documentElement.removeAttribute("data-_q");
+  }, 10000);
+
   // --- Jupyter detection ---
 
   function isJupyter() {
