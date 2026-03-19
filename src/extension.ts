@@ -170,12 +170,16 @@ async function sendTextToTelegram(text: string): Promise<void> {
 }
 
 function splitMessage(text: string, limit: number): string[] {
+  if (limit <= 0) {
+    return [text];
+  }
   if (text.length <= limit) {
     return [text];
   }
 
   const chunks: string[] = [];
   let remaining = text;
+  let openTags: string[] = [];
 
   while (remaining.length > 0) {
     if (remaining.length <= limit) {
@@ -185,16 +189,66 @@ function splitMessage(text: string, limit: number): string[] {
 
     // Try to split at a newline near the limit
     let splitAt = remaining.lastIndexOf("\n", limit);
+    let skipNewline = false;
     if (splitAt < limit * 0.5) {
       // No good newline — split at limit
       splitAt = limit;
+    } else {
+      skipNewline = true;
     }
 
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt);
+    let chunk = remaining.slice(0, splitAt);
+
+    // Track unclosed HTML tags in this chunk
+    const unclosed = getUnclosedTags(chunk, openTags);
+    if (unclosed.length > 0) {
+      // Close tags in LIFO order
+      for (let i = unclosed.length - 1; i >= 0; i--) {
+        chunk += `</${unclosed[i]}>`;
+      }
+    }
+
+    chunks.push(chunk);
+
+    // Advance past the split point (skip newline if we split at one)
+    remaining = remaining.slice(splitAt + (skipNewline ? 1 : 0));
+
+    // Re-open tags at start of next chunk in original order
+    if (unclosed.length > 0) {
+      const reopened = unclosed.map((tag) => `<${tag}>`).join("");
+      remaining = reopened + remaining;
+    }
+
+    openTags = unclosed;
   }
 
   return chunks;
+}
+
+function getUnclosedTags(chunk: string, priorOpen: string[]): string[] {
+  const stack = [...priorOpen];
+  const tagRegex = /<\/?(\w+)>/g;
+  let match;
+
+  while ((match = tagRegex.exec(chunk)) !== null) {
+    const fullTag = match[0];
+    const tagName = match[1].toLowerCase();
+    // Only track tags Serpent uses
+    if (tagName !== "pre" && tagName !== "b") {
+      continue;
+    }
+    if (fullTag.startsWith("</")) {
+      // Closing tag — pop from stack if it matches
+      const idx = stack.lastIndexOf(tagName);
+      if (idx !== -1) {
+        stack.splice(idx, 1);
+      }
+    } else {
+      stack.push(tagName);
+    }
+  }
+
+  return stack;
 }
 
 async function sendImageToTelegram(data: Buffer, caption?: string): Promise<void> {
