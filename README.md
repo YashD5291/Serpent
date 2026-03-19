@@ -52,7 +52,7 @@ The extension appears as **Page Notes** (a decoy notes app). To change credentia
 
 ### Supported Platforms
 
-**Jupyter notebooks:** localhost, JupyterHub, Kaggle, Databricks, SageMaker, Google Colab, CoderPad (notebook mode)
+**Jupyter notebooks:** Any JupyterLab/JupyterHub instance (self-hosted, Saturn Cloud, Kaggle, Databricks, SageMaker, Google Colab, CoderPad, etc.)
 
 **Coding platforms:** LeetCode, HackerRank, Codeforces, CodeChef, Codility, CoderPad, AtCoder, CSES, Kattis, SPOJ
 
