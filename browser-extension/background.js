@@ -47,20 +47,71 @@ async function getConfig() {
 const MSG_LIMIT = 4096;
 
 function splitMessage(text, limit) {
+  if (limit <= 0) return [text];
   if (text.length <= limit) return [text];
-  const chunks = [];
-  let remaining = text;
+
+  var chunks = [];
+  var remaining = text;
+  var openTags = [];
+
   while (remaining.length > 0) {
     if (remaining.length <= limit) {
       chunks.push(remaining);
       break;
     }
-    let splitAt = remaining.lastIndexOf("\n", limit);
-    if (splitAt < limit * 0.5) splitAt = limit;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt);
+
+    var splitAt = remaining.lastIndexOf("\n", limit);
+    var skipNewline = false;
+    if (splitAt < limit * 0.5) {
+      splitAt = limit;
+    } else {
+      skipNewline = true;
+    }
+
+    var chunk = remaining.slice(0, splitAt);
+
+    var unclosed = getUnclosedTags(chunk, openTags);
+    if (unclosed.length > 0) {
+      for (var i = unclosed.length - 1; i >= 0; i--) {
+        chunk += "</" + unclosed[i] + ">";
+      }
+    }
+
+    chunks.push(chunk);
+    remaining = remaining.slice(splitAt + (skipNewline ? 1 : 0));
+
+    if (unclosed.length > 0) {
+      var reopened = "";
+      for (var j = 0; j < unclosed.length; j++) {
+        reopened += "<" + unclosed[j] + ">";
+      }
+      remaining = reopened + remaining;
+    }
+
+    openTags = unclosed;
   }
+
   return chunks;
+}
+
+function getUnclosedTags(chunk, priorOpen) {
+  var stack = priorOpen.slice();
+  var tagRegex = /<\/?(\w+)>/g;
+  var match;
+
+  while ((match = tagRegex.exec(chunk)) !== null) {
+    var fullTag = match[0];
+    var tagName = match[1].toLowerCase();
+    if (tagName !== "pre" && tagName !== "b") continue;
+    if (fullTag.indexOf("</") === 0) {
+      var idx = stack.lastIndexOf(tagName);
+      if (idx !== -1) stack.splice(idx, 1);
+    } else {
+      stack.push(tagName);
+    }
+  }
+
+  return stack;
 }
 
 function escapeHtml(text) {
