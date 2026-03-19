@@ -118,6 +118,25 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function isRetryable(err) {
+  if (err.message && (
+    err.message.indexOf("timed out") !== -1 ||
+    err.message.indexOf("Failed to fetch") !== -1 ||
+    err.message.indexOf("NetworkError") !== -1
+  )) {
+    return true;
+  }
+  var code = err.statusCode;
+  if (code && (code === 429 || (code >= 500 && code < 600))) {
+    return true;
+  }
+  return false;
+}
+
+function delay(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
 async function telegramFetch(botToken, method, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
@@ -129,7 +148,11 @@ async function telegramFetch(botToken, method, body) {
       signal: controller.signal,
     });
     const json = await res.json();
-    if (!json.ok) throw new Error(json.description || "API error");
+    if (!json.ok) {
+      var err = new Error(json.description || "API error");
+      err.statusCode = res.status;
+      throw err;
+    }
     return json;
   } catch (err) {
     if (err.name === "AbortError") throw new Error("Request timed out");
@@ -139,11 +162,23 @@ async function telegramFetch(botToken, method, body) {
   }
 }
 
+async function telegramFetchWithRetry(botToken, method, body) {
+  try {
+    return await telegramFetch(botToken, method, body);
+  } catch (err) {
+    if (isRetryable(err)) {
+      await delay(2000);
+      return await telegramFetch(botToken, method, body);
+    }
+    throw err;
+  }
+}
+
 async function sendText(text) {
   const { botToken, chatId } = await getConfig();
   const chunks = splitMessage(text, MSG_LIMIT);
   for (const chunk of chunks) {
-    await telegramFetch(botToken, "sendMessage", {
+    await telegramFetchWithRetry(botToken, "sendMessage", {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
@@ -158,12 +193,17 @@ async function sendImage(base64Data, caption) {
   const { botToken, chatId } = await getConfig();
 
   // Convert base64 to blob
-  const binary = atob(base64Data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
+  var binary;
+  try {
+    binary = atob(base64Data);
+  } catch (e) {
+    throw new Error("Invalid image data");
+  }
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: "image/png" });
+  var blob = new Blob([bytes], { type: "image/png" });
 
   const form = new FormData();
   form.append("chat_id", chatId);
@@ -173,7 +213,7 @@ async function sendImage(base64Data, caption) {
     form.append("parse_mode", "HTML");
   }
 
-  await telegramFetch(botToken, "sendPhoto", { body: form });
+  await telegramFetchWithRetry(botToken, "sendPhoto", { body: form });
 }
 
 async function sendDocument(content, filename) {
@@ -184,5 +224,5 @@ async function sendDocument(content, filename) {
   form.append("chat_id", chatId);
   form.append("document", blob, filename || "file.txt");
 
-  await telegramFetch(botToken, "sendDocument", { body: form });
+  await telegramFetchWithRetry(botToken, "sendDocument", { body: form });
 }
